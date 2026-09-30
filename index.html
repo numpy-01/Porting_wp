@@ -69,7 +69,6 @@
     <h2>PED Details</h2>
     <div id="pedContainer"></div>
     <button class="secondary" type="button" onclick="addPed()">+ Add PED</button>
-    <div class="hint" style="margin-top:8px">If Endorsed = No, endorsement year is not required. Add as many PEDs as needed.</div>
   </div>
 
   <div class="card">
@@ -259,7 +258,7 @@ function calculate(){
   const tbody=document.getElementById('pedResults'); tbody.innerHTML='';
   peds.forEach(p=>{
     const tr=document.createElement('tr');
-    tr.innerHTML='<td>'+esc(p.name)+'</td><td><span class="badge '+(p.endorsed==='Yes'?'yes':'no')+'">'+esc(p.endorsed)+'</span></td><td>'+esc(p.year||'')+'</td><td>'+p.yearsServed+'</td><td>'+p.remaining+' years</td>';
+    tr.innerHTML='<td>'+esc(p.name)+'</td><td><span class="badge '+(p.endorsed==='Yes'?'yes':'no')+'">'+esc(p.endorsed)+'</span></td><td>'+esc(p.year||'')+'</td><td>'+p.yearsServed+'</td><td>'+p.remaining+'</td>';
     tbody.appendChild(tr);
   });
 
