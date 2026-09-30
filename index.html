@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Porting & Waiting Period Calculator</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#1f2937}
+  .app{max-width:1100px;margin:auto;padding:24px 16px 50px}
+  .header,.card{background:#fff;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+  .header{padding:22px 24px;margin-bottom:16px}
+  h1{margin:0 0 6px;font-size:25px}
+  h2{font-size:18px;margin:0 0 16px}
+  .sub,.hint{color:#667085;font-size:13px}
+  .card{padding:20px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .field label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+  input,select{width:100%;border:1px solid #d0d5dd;border-radius:8px;padding:10px 11px;font-size:14px;background:#fff}
+  input:focus,select:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.12)}
+  button{border:0;border-radius:8px;padding:10px 15px;cursor:pointer;font-weight:600;font-size:14px}
+  .primary{background:#111827;color:#fff}.secondary{background:#eef2f7;color:#1f2937}
+  .danger{background:#fff0f0;color:#b42318}.actions{display:flex;gap:10px;margin-top:14px}
+  .ped-row{display:grid;grid-template-columns:1.6fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px}
+  .error{display:none;background:#fff1f0;color:#b42318;border:1px solid #fecdca;padding:11px 13px;border-radius:8px;margin-bottom:12px;font-size:13px}
+  #results{display:none}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .metric{border:1px solid #eaecf0;border-radius:10px;padding:13px}
+  .metric .label{color:#667085;font-size:12px}.metric .value{font-size:19px;font-weight:700;margin-top:4px}
+  .section-title{margin:20px 0 10px;font-weight:700;font-size:15px}
+  .summary{background:#f8f9fc;border-radius:10px;padding:14px;line-height:1.55;font-size:14px}
+  .table-wrap{overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:10px 8px;border-bottom:1px solid #eaecf0;text-align:left;white-space:nowrap}
+  th{background:#f9fafb}
+  .rule-grid{display:grid;grid-template-columns:1fr 140px 2fr;gap:8px;align-items:center}
+  .rule-grid>div{font-size:13px}.rule-head{font-weight:700}
+  .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}
+  .yes{background:#ecfdf3;color:#027a48}.no{background:#fff1f0;color:#b42318}
+  .note{font-size:12px;color:#667085;margin-top:10px}
+  @media(max-width:760px){
+    .grid,.metrics{grid-template-columns:1fr}
+    .ped-row{grid-template-columns:1fr}
+    .ped-row button{width:100%}
+    .rule-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>Porting & Waiting Period Calculator</h1>
+    <div class="sub">Dynamic web version based on the rules and calculation structure in the supplied Excel workbook.</div>
+  </div>
+
+  <div class="card">
+    <h2>Current Plan Details</h2>
+    <div id="error" class="error"></div>
+    <div class="grid">
+      <div class="field"><label>Policy Inception Date</label><input id="policyInceptionDate" type="date"></div>
+      <div class="field"><label>Renewal / As-of Date</label><input id="asOfDate" type="date"></div>
+      <div class="field"><label>Current SI (₹ lakh)</label><input id="currentSI" type="number" min="0" step="0.01" placeholder="10"></div>
+      <div class="field"><label>Accumulated Bonus (₹ lakh)</label><input id="bonus" type="number" min="0" step="0.01" placeholder="10"></div>
+      <div class="field"><label>Enhanced SI (₹ lakh)</label><input id="enhancedSI" type="number" min="0" step="0.01" placeholder="15"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>PED Details</h2>
+    <div id="pedContainer"></div>
+    <button class="secondary" type="button" onclick="addPed()">+ Add PED</button>
+    <div class="hint" style="margin-top:8px">If Endorsed = No, endorsement year is not required. Add as many PEDs as needed.</div>
+  </div>
+
+  <div class="card">
+    <h2>Calculator Rules</h2>
+    <div class="rule-grid">
+      <div class="rule-head">Rule</div><div class="rule-head">Value</div><div class="rule-head">Notes</div>
+      <div>Initial WP</div><div><input id="ruleInitialDays" type="number" min="0"></div><div>Served when tenure reaches this many elapsed days.</div>
+      <div>Specific Illness WP</div><div><input id="ruleSpecificYears" type="number" min="0" step="0.1"></div><div>Current SI + Bonus gets credit for completed tenure.</div>
+      <div>PED WP</div><div><input id="rulePedYears" type="number" min="0" step="0.1"></div><div>Current SI + Bonus gets credit for PEDs endorsed at inception.</div>
+    </div>
+    <div class="note">These rule values are editable so the web app can be updated if the Rules sheet changes.</div>
+  </div>
+
+  <div class="card">
+    <div class="actions">
+      <button class="primary" type="button" onclick="calculate()">Calculate</button>
+      <button class="secondary" type="button" onclick="resetForm()">Reset</button>
+    </div>
+  </div>
+
+  <div id="results">
+    <div class="card">
+      <h2>Porting Calculation</h2>
+      <div class="metrics">
+        <div class="metric"><div class="label">Completed Tenure</div><div class="value" id="tenure"></div></div>
+        <div class="metric"><div class="label">Additional Months</div><div class="value" id="months"></div></div>
+        <div class="metric"><div class="label">30-Day WP</div><div class="value" id="initialStatus"></div></div>
+        <div class="metric"><div class="label">Specific Illness WP Remaining</div><div class="value" id="specificRemaining"></div></div>
+      </div>
+
+      <div class="section-title">Current SI + Bonus</div>
+      <div class="summary" id="currentPlusBonus"></div>
+
+      <div class="section-title">Enhanced SI</div>
+      <div class="summary" id="enhancedSummary"></div>
+
+      <div class="section-title">PED-wise Porting Position</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>PED</th><th>Endorsed</th><th>Endorsement Year</th><th>Years Served</th><th>PED WP Remaining</th></tr></thead>
+          <tbody id="pedResults"></tbody>
+        </table>
+      </div>
+
+      <div id="zeroYearBlock" style="display:none">
+        <div class="section-title">0 Years Served</div>
+        <div class="summary" id="zeroYearSummary"></div>
+      </div>
+
+      <div class="section-title">Auto-generated Porting Summary</div>
+      <div class="summary" id="autoSummary"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let pedCount=0;
+
+const DEFAULT_RULES={initialDays:30,specificYears:2,pedYears:3};
+
+function esc(v){
+  return String(v ?? '').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[s]));
+}
+
+function addPed(name='',endorsed='Yes',year=''){
+  pedCount++;
+  const id=pedCount;
+  const row=document.createElement('div');
+  row.className='ped-row'; row.id='ped-'+id;
+  row.innerHTML=`
+    <div class="field"><label>PED</label><input class="ped-name" type="text" placeholder="e.g. Hypertension" value="${esc(name)}"></div>
+    <div class="field"><label>Endorsed at inception?</label>
+      <select class="ped-endorsed" onchange="toggleYear(this,${id})">
+        <option value="Yes" ${endorsed==='Yes'?'selected':''}>Yes</option>
+        <option value="No" ${endorsed==='No'?'selected':''}>No</option>
+      </select>
+    </div>
+    <div class="field"><label>Endorsement year</label><input class="ped-year" type="number" min="1900" max="2100" placeholder="2025" value="${esc(year)}"></div>
+    <button class="danger" type="button" onclick="removePed(${id})">Remove</button>`;
+  document.getElementById('pedContainer').appendChild(row);
+  toggleYear(row.querySelector('.ped-endorsed'),id);
+}
+
+function toggleYear(select,id){
+  const row=document.getElementById('ped-'+id);
+  const year=row.querySelector('.ped-year');
+  year.disabled=select.value==='No';
+  if(year.disabled) year.value='';
+}
+function removePed(id){const row=document.getElementById('ped-'+id);if(row)row.remove()}
+
+function parseDate(s){const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
+function elapsedParts(start,end){
+  let years=end.getFullYear()-start.getFullYear();
+  let anniv=new Date(start.getFullYear()+years,start.getMonth(),start.getDate());
+  if(anniv>end){years--;anniv=new Date(start.getFullYear()+years,start.getMonth(),start.getDate())}
+  let months=end.getMonth()-anniv.getMonth()+(12*(end.getFullYear()-anniv.getFullYear()));
+  if(end.getDate()<anniv.getDate()) months--;
+  if(months<0) months+=12;
+  return {years,months,days:Math.floor((end-start)/86400000)};
+}
+
+function getRules(){
+  return {
+    initialDays:Number(document.getElementById('ruleInitialDays').value),
+    specificYears:Number(document.getElementById('ruleSpecificYears').value),
+    pedYears:Number(document.getElementById('rulePedYears').value)
+  };
+}
+
+function getInput(){
+  const peds=[...document.querySelectorAll('.ped-row')].map(row=>({
+    name:row.querySelector('.ped-name').value.trim(),
+    endorsed:row.querySelector('.ped-endorsed').value,
+    endorsementYear:row.querySelector('.ped-year').value
+  })).filter(p=>p.name);
+  return {
+    policyInceptionDate:document.getElementById('policyInceptionDate').value,
+    asOfDate:document.getElementById('asOfDate').value,
+    currentSI:Number(document.getElementById('currentSI').value),
+    bonus:Number(document.getElementById('bonus').value),
+    enhancedSI:Number(document.getElementById('enhancedSI').value),
+    peds
+  };
+}
+
+function error(msg){
+  const e=document.getElementById('error'); e.textContent=msg; e.style.display='block';
+}
+function clearError(){document.getElementById('error').style.display='none'}
+
+function calculate(){
+  clearError();
+  const x=getInput(), r=getRules();
+  if(!x.policyInceptionDate||!x.asOfDate){error('Please enter both Policy Inception Date and Renewal / As-of Date.');return}
+  const start=parseDate(x.policyInceptionDate), end=parseDate(x.asOfDate);
+  if(end<start){error('Renewal / As-of Date cannot be before Policy Inception Date.');return}
+  if([x.currentSI,x.bonus,x.enhancedSI].some(v=>!Number.isFinite(v))){error('Please enter Current SI, Bonus and Enhanced SI.');return}
+  if(r.initialDays<0||r.specificYears<0||r.pedYears<0){error('Rule values cannot be negative.');return}
+
+  const t=elapsedParts(start,end);
+  const initialServed=t.days>=r.initialDays;
+  const initialRemaining=Math.max(0,r.initialDays-t.days);
+  const specificRemaining=Math.max(0,r.specificYears-t.years);
+  const currentPlusBonus=x.currentSI+x.bonus;
+  const enhancedExceeds=x.enhancedSI>currentPlusBonus;
+
+  const peds=x.peds.map(p=>{
+    let yearsServed=0;
+    let remaining=r.pedYears;
+    let year='';
+    if(p.endorsed.toLowerCase()==='no'){
+      yearsServed=0; remaining=r.pedYears;
+    }else{
+      year=p.endorsementYear;
+      const endorsementYear=year?Number(year):start.getFullYear();
+      yearsServed=Math.max(0,end.getFullYear()-endorsementYear);
+      remaining=Math.max(0,r.pedYears-yearsServed);
+    }
+    return {...p,year,yearsServed,remaining};
+  });
+
+  const endorsed=peds.filter(p=>p.endorsed==='Yes');
+  const nonEndorsed=peds.filter(p=>p.endorsed==='No');
+  const endorsedRemaining=endorsed.length?Math.min(...endorsed.map(p=>p.remaining)):null;
+  const zeroYear=peds.filter(p=>p.yearsServed===0);
+
+  document.getElementById('results').style.display='block';
+  document.getElementById('tenure').textContent=t.years+' years';
+  document.getElementById('months').textContent=t.months+' months';
+  document.getElementById('initialStatus').textContent=initialServed?'Served':'Remaining ('+initialRemaining+' days)';
+  document.getElementById('specificRemaining').textContent=specificRemaining+' years';
+
+  document.getElementById('currentPlusBonus').innerHTML=
+    '<b>Current SI + Bonus:</b> ₹'+formatNum(currentPlusBonus)+' lakh<br><br>'+
+    '<b>30 days:</b> '+(initialServed?'Served':'Remaining ('+initialRemaining+' days)')+
+    '<br><b>Specific Illness:</b> '+(specificRemaining===0?r.specificYears+' years served':specificRemaining+' years remaining')+
+    '<br><b>Endorsed PEDs:</b> '+(endorsed.length?endorsed.map(p=>esc(p.name)+': '+p.remaining+' years PED WP remaining').join('; '):'No endorsed PEDs')+
+    '<br><b>Non-endorsed PEDs:</b> '+(nonEndorsed.length?r.pedYears+' years PED WP for entire current SI + bonus':'No additional WP');
+
+  document.getElementById('enhancedSummary').innerHTML=
+    '<b>Enhanced SI exceeds Current SI + Bonus:</b> '+(enhancedExceeds?'Yes':'No')+
+    '<br><b>30 days:</b> '+(enhancedExceeds?r.initialDays+' days fresh':'No additional WP')+
+    '<br><b>Specific Illness:</b> '+(enhancedExceeds?r.specificYears+' years fresh':'No additional WP')+
+    '<br><b>PED:</b> '+(enhancedExceeds?r.pedYears+' years fresh':'No additional WP');
+
+  const tbody=document.getElementById('pedResults'); tbody.innerHTML='';
+  peds.forEach(p=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td>'+esc(p.name)+'</td><td><span class="badge '+(p.endorsed==='Yes'?'yes':'no')+'">'+esc(p.endorsed)+'</span></td><td>'+esc(p.year||'')+'</td><td>'+p.yearsServed+'</td><td>'+p.remaining+' years</td>';
+    tbody.appendChild(tr);
+  });
+
+  if(zeroYear.length){
+    document.getElementById('zeroYearBlock').style.display='block';
+    document.getElementById('zeroYearSummary').textContent=
+      zeroYear.length===1
+      ? '3 years PED WP for entire SI – ₹'+formatNum(x.enhancedSI)+'L'
+      : '3 years PED WP for the PED(s) with 0 years served for entire SI – ₹'+formatNum(x.enhancedSI)+'L';
+  }else document.getElementById('zeroYearBlock').style.display='none';
+
+  document.getElementById('autoSummary').textContent=
+    peds.length
+    ? peds.map(p=>p.endorsed==='No'
+      ? p.name+': Not endorsed; '+r.pedYears+' years PED WP for entire SI + bonus'
+      : (p.year?p.name+': Endorsed in '+p.year+'; '+p.remaining+' years PED WP remaining':p.name+': Endorsed at inception; '+p.remaining+' years PED WP remaining')
+    ).join('; ')
+    : 'No PED entries were provided.';
+}
+
+function formatNum(n){return Number(n).toLocaleString('en-IN',{maximumFractionDigits:2})}
+
+function resetForm(){
+  ['policyInceptionDate','asOfDate','currentSI','bonus','enhancedSI'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('pedContainer').innerHTML=''; pedCount=0; addPed();
+  document.getElementById('results').style.display='none'; clearError();
+  document.getElementById('ruleInitialDays').value=DEFAULT_RULES.initialDays;
+  document.getElementById('ruleSpecificYears').value=DEFAULT_RULES.specificYears;
+  document.getElementById('rulePedYears').value=DEFAULT_RULES.pedYears;
+}
+
+document.getElementById('ruleInitialDays').value=DEFAULT_RULES.initialDays;
+document.getElementById('ruleSpecificYears').value=DEFAULT_RULES.specificYears;
+document.getElementById('rulePedYears').value=DEFAULT_RULES.pedYears;
+addPed();
+</script>
+</body>
+</html>
